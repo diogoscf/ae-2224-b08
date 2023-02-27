@@ -21,6 +21,7 @@ for i in range(0,len(x)):
 # plt.quiver(x,y,u,v)
 # plt.show()
 fig_piv, ax_piv = plt.subplots()
-ax_piv.quiver(x_reduced, y_reduced, u_reduced, v_reduced, pivot="mid", scale=100, scale_units="xy", width=0.002, headwidth=3, headlength=4, headaxislength=3)
+qq = ax_piv.quiver(x_reduced, y_reduced, u_reduced, v_reduced,u_reduced,cmap = plt.cm.jet, pivot="mid", scale=100, scale_units="xy", width=0.002, headwidth=3, headlength=4, headaxislength=3)
+plt.colorbar(qq, cmap=plt.cm.jet)
 
 plt.show()
