@@ -13,7 +13,7 @@ y_reduced =[]
 u_reduced = []
 v_reduced = []
 for i in range(0,len(x)):
-    if i %20==0:
+    if i % 20==0:
         x_reduced.append(x[i])
         y_reduced.append(y[i])
         u_reduced.append(u[i])
@@ -21,7 +21,7 @@ for i in range(0,len(x)):
 # plt.quiver(x,y,u,v)
 # plt.show()
 fig_piv, ax_piv = plt.subplots()
-qq = ax_piv.quiver(x_reduced, y_reduced, u_reduced, v_reduced,u_reduced,cmap = plt.cm.jet, pivot="mid", scale=100, scale_units="xy", width=0.002, headwidth=3, headlength=4, headaxislength=3)
+qq = ax_piv.quiver(x_reduced, y_reduced, u_reduced, v_reduced,u_reduced,cmap = plt.cm.jet, pivot="tail", scale=100, scale_units="xy", width=0.002, headwidth=3, headlength=4, headaxislength=3)
 plt.colorbar(qq, cmap=plt.cm.jet)
 
 plt.show()
