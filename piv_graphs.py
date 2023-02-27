@@ -18,7 +18,7 @@ colors /= np.max(colors)
 norm = Normalize()
 norm.autoscale(colors)
 
-ax_piv.quiver(X, Y, U, V, colors, pivot="mid", scale=100, scale_units="xy", width=0.001, headwidth=3, headlength=4, headaxislength=3)
+ax_piv.quiver(X, Y, U, V, color=cm.inferno(norm(colors)), pivot="mid", scale=100, scale_units="xy", width=0.001, headwidth=3, headlength=4, headaxislength=3)
 # ax_piv.set_title("PIV data for AoA 2°, Re = 200 000")
 ax_piv.set_xlabel("x/c [-]")
 ax_piv.set_ylabel("y/c [-]")
