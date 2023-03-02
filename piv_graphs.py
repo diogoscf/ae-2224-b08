@@ -27,7 +27,7 @@ ax_piv.set_ylabel("y/c [-]")
 
 absv = np.linalg.norm(np.column_stack((u, v)), axis=1)
 fig_hm, ax_hm = plt.subplots()
-heatmap = plt.imshow(absv.reshape((ycount,xcount))[:,::-1], extent=(piv_data[0,0], piv_data[-1,0], piv_data[0,1], piv_data[-1,1]), cmap="hot", interpolation="nearest")
+heatmap = plt.imshow(absv.reshape((ycount,xcount))[:,::-1], extent=(piv_data[-1,0], piv_data[0,0], piv_data[-1,1], piv_data[0,1]), cmap="hot", interpolation="nearest")
 plt.colorbar()
 
 sorted_data = piv_data[np.lexsort((piv_data[:,1], piv_data[:,0]))]
