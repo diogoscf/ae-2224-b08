@@ -6,7 +6,9 @@ from scipy.interpolate import RegularGridInterpolator
 
 from load_data import piv_data
 
-vccsm = cm.turbo # Vector Field Colour Scheme
+# Vector Field Colour Scheme
+vccsm = cm.turbo 
+# vccsm = cm.coolwarm
 
 xcount, ycount = 395, 57
 ylim = 57
@@ -33,7 +35,8 @@ sm = cm.ScalarMappable(cmap=vccsm, norm=norm)
 sm.set_array([])
 plt.colorbar(sm, ax=ax_piv, label="Absolute velocity [1/U$_{inf}$]")
 
-absv = np.linalg.norm(np.column_stack((u, v)), axis=1)
+# absv = np.linalg.norm(np.column_stack((u, v)), axis=1)
+absv = np.abs(u)
 fig_hm, ax_hm = plt.subplots()
 heatmap = ax_hm.imshow(absv.reshape((ycount,xcount))[:,::-1], extent=(piv_data[-1,0], piv_data[0,0], piv_data[-1,1], piv_data[0,1]), cmap=cm.coolwarm, interpolation="nearest", aspect="auto")
 plt.colorbar(heatmap, label="Absolute velocity [1/U$_{inf}$]", ax=ax_hm)
