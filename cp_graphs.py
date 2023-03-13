@@ -58,3 +58,25 @@ ax_cp.axvline(0, c='black', ls = '-', linewidth = 0.8)
 ax_cp.axhline(0, c='black', ls = '-', linewidth = 0.8)
 
 plt.show()
+
+
+
+def location(feature):
+
+    if feature == "separation":
+
+        x = (b1-b0)/(a0-a1)
+        
+    if feature == "transition":
+        
+        x = (b2-b1)/(a1-a2)
+
+    if feature == "reattachment":
+
+        x = (b3-b2)/(a2-a3)
+
+    return x
+
+print(f'Separation location (x/c): {float(location("separation")):.3f}')        
+print(f'Transition location (x/c): {float(location("transition")):.3f}')
+print(f'Reattachment location (x/c): {float(location("reattachment")):.3f}')
