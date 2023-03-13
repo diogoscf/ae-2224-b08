@@ -24,4 +24,9 @@ ax_grad = ax_avg.twinx()
 dx = irt_data[1, 0] - irt_data[0, 0]
 g = np.gradient(irt_avg, dx)
 ax_grad.plot(np.unique(irt_data[0:-1, 0]), g, color="red", marker=".", linestyle="none")
+
+# g2 = -g
+# ax_grad.plot(np.unique(irt_data[0:-1, 0]), g2, color="green", marker=".", linestyle="none")
+
 plt.show()
+
