@@ -3,6 +3,7 @@ import matplotlib.cm as cm
 from matplotlib.colors import Normalize
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
+from scipy.integrate import solve_ivp
 
 from load_data import piv_data
 
@@ -60,25 +61,42 @@ speed = np.sqrt(uCi**2 + vCi**2)
 norm = Normalize()
 norm.autoscale(speed)
 
+def f(t, xy):
+    if xy[1] < y.min() or xy[1] > y.max() or xy[0] < x.min() or xy[0] > x.max():
+        return np.array([0, 0])
+    return np.squeeze([u_intpl(xy), v_intpl(xy)])
+
+def gen_strmln(seed_point):
+    sol = solve_ivp(f, [0, 10], seed_point, first_step=1e-3, max_step=1e-2, method="RK45", dense_output=True)
+    positions = sol.y
+    while (positions[0, -1] > x.max() or positions[0, -1] < x.min() or positions[1, -1] > y.max() or positions[1, -1] < y.min()):
+        positions = positions[:,:-1]
+    return positions
+
 if plot_velocity_heatmap:
     # absv = np.linalg.norm(np.column_stack((u, v)), axis=1)
     # absv = np.abs(u)
-    factor = 15
-    xi = np.linspace(X.min(), X.max(), xcount*factor)
-    yi = np.linspace(Y.min(), Y.max(), ycount*factor)
-    xy_grid = np.array([[x, y] for x in xi for y in yi])
+    factor = 5 # Resolution increase
+    xj = np.linspace(X.min(), X.max(), xcount*factor)
+    yj = np.linspace(Y.min(), Y.max(), ycount*factor)
+    xy_grid = np.array([[x, y] for x in xj for y in yj])
     absv = u_intpl(xy_grid).reshape((xcount*factor,ycount*factor)).T
+    # absv = np.abs(absv)
+    # absv = (absv > 0.1)
     fig_hm, ax_hm = plt.subplots()
-    heatmap = ax_hm.imshow(absv[::-1,:], extent=(piv_data[-1,0], piv_data[0,0], piv_data[-1,1], piv_data[0,1]), cmap=cm.coolwarm, interpolation="nearest", aspect="auto")
+    heatmap = ax_hm.imshow(absv[::-1,:], extent=(piv_data[-1,0], piv_data[0,0], piv_data[-1,1], piv_data[0,1]), cmap=cm.turbo, interpolation="nearest", aspect="auto")
     plt.colorbar(heatmap, label="Absolute velocity [1/U$_{inf}$]", ax=ax_hm)
     ax_hm.set_xlabel("x/c [-]")
     ax_hm.set_ylabel("y/c [-]")
 
-    xi = np.linspace(X.min(), X.max(), xcount)
-    yi = np.linspace(Y.min(), Y.max(), ycount)
-    seed_point = np.array([[0.49,1e-10]])
-    ax_hm.streamplot(xi, yi, uCi.reshape((xcount, ycount)).T, vCi.reshape((xcount, ycount)).T, color="black", cmap=vccsm, linewidth=1, density=2, arrowstyle="->", arrowsize=1.5, start_points=seed_point)
+    ax_hm.contour(xj,  yj, absv.reshape(ycount*factor,xcount*factor), levels=[0.45], colors="red", linewidths=1)
 
+    # seed_points = np.array([[xk,1e-10] for xk in np.linspace(0.45, 0.6, 8)])
+    seed_points = np.array([[0.48, 1e-10]])
+    ax_hm.streamplot(xi, yi, uCi.reshape((xcount, ycount)).T, vCi.reshape((xcount, ycount)).T, color="black", cmap=vccsm, linewidth=1, density=2, arrowstyle="->", arrowsize=1.5, start_points=seed_points, broken_streamlines=False)
+    sol = gen_strmln(seed_points[0])
+    # print(sol)
+    ax_hm.plot(sol[0], sol[1], "r-")
 
 if plot_streamlines:
     fig_strm, ax_strm = plt.subplots()
@@ -105,12 +123,5 @@ if plot_individual_streamline:
     sm.set_array([])
     ax_strm.plot(seed_point.T[0], seed_point.T[1], "bo")
     plt.colorbar(sm, ax=ax_strm, label="Absolute velocity [1/U$_{inf}$]")
-
-# ax_quiver.quiver(xy_points[:,0], xy_points[:,1], uCi, vCi, color=cm.jet(norm(qv_speed)), pivot="mid", scale=100, scale_units="xy", width=0.001, headwidth=3, headlength=4, headaxislength=3)
-
-# Velocity plot contour
-# fig_vc, ax_vc = plt.subplots()
-# absv = u**2 + v**2
-# ax_vc.contour(x.reshape(57, 395), y.reshape(57, 395), absv.reshape(57, 395))
 
 plt.show()
