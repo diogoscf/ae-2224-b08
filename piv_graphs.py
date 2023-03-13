@@ -74,6 +74,12 @@ if plot_velocity_heatmap:
     ax_hm.set_xlabel("x/c [-]")
     ax_hm.set_ylabel("y/c [-]")
 
+    xi = np.linspace(X.min(), X.max(), xcount)
+    yi = np.linspace(Y.min(), Y.max(), ycount)
+    seed_point = np.array([[0.49,1e-10]])
+    ax_hm.streamplot(xi, yi, uCi.reshape((xcount, ycount)).T, vCi.reshape((xcount, ycount)).T, color="black", cmap=vccsm, linewidth=1, density=2, arrowstyle="->", arrowsize=1.5, start_points=seed_point)
+
+
 if plot_streamlines:
     fig_strm, ax_strm = plt.subplots()
     colour = speed.reshape((xcount, ycount)).T
