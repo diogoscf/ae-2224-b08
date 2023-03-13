@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-
+from sklearn.linear_model import LinearRegression
 from load_data import cp_data
 
 x1= cp_data[17:23, 0].reshape(-1,1)
