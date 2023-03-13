@@ -43,5 +43,8 @@ for i in range(0,len(irt_array),10):
     g1 = np.gradient(irt_array[i], dx)
     ax_sec1.plot(x,g1)  
     
+# g2 = -g
+# ax_grad.plot(np.unique(irt_data[0:-1, 0]), g2, color="green", marker=".", linestyle="none")
+
 plt.show()
 
