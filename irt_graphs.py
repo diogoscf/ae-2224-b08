@@ -23,8 +23,26 @@ ax_avg.set(ylim=(tmin, tmax), xlim=(xmin, xmax))
 ax_grad = ax_avg.twinx()
 dx = irt_data[1, 0] - irt_data[0, 0]
 g = np.gradient(irt_avg, dx)
+
 ax_grad.plot(np.unique(irt_data[0:-1, 0]), g, color="red", marker=".", linestyle="none")
 
+
+fig_inv, ax_inv = plt.subplots()
+irt_inv = 1/irt_avg
+ax_inv.plot(np.unique(irt_data[0:-1, 0]),irt_inv, color="green", marker=".", linestyle="none")
+ax_inv.set_xlabel("x/c [-]")
+ax_inv.set_ylabel("1/Temperature Counts")
+#plots for three intervals
+fig_sec, ax_sec1 = plt.subplots()
+
+x = np.unique(irt_data[0:-1, 0])
+for i in range(0,len(irt_array),10):
+
+    ax_sec1.plot(x,irt_array[i])
+    dx1 = irt_data[1, 0] - irt_data[0, 0]
+    g1 = np.gradient(irt_array[i], dx)
+    ax_sec1.plot(x,g1)  
+    
 # g2 = -g
 # ax_grad.plot(np.unique(irt_data[0:-1, 0]), g2, color="green", marker=".", linestyle="none")
 
