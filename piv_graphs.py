@@ -18,7 +18,9 @@ plot_streamlines = False
 plot_individual_streamline = False
 include_slider = True
 discrete_colormap = True
+include_streamplot = True
 heatmap_velocity = "x" # "x" or "absolute" or "absx"
+intpl_method = "linear" # "linear", "cubic", "quadratic"
 
 xcount, ycount = 395, 57
 ylim = 57
@@ -30,8 +32,7 @@ ymin, ymax = -0.001, y.max()*1.03
 u, v = piv_data[:, 2], piv_data[:, 3]
 X, Y = piv_data[minl::step, 0], piv_data[minl::step, 1]
 U, V = piv_data[minl::step, 2], piv_data[minl::step, 3]
-cutoff_laminar = 0.007
-cutoff_turbulent = 0.007
+cutoff = 0.007
 
 colors = np.linalg.norm(np.column_stack((U, V)), axis=1)
 norm = Normalize()
@@ -78,7 +79,7 @@ def gen_strmln(seed_point, min_y=y.min()):
     while (positions[0, -1] > x.max() or positions[0, -1] < x.min() or positions[1, -1] > y.max() or positions[1, -1] < min_y):
         positions = positions[:,:-1]
     
-    intpl = interp1d(positions[0], positions[1], kind="linear", fill_value="extrapolate")
+    intpl = interp1d(positions[0], positions[1], kind=intpl_method, fill_value="extrapolate")
     return positions, intpl
 
 def get_strml_pts(seed_point, xspace, min_y=y.min()):
@@ -123,10 +124,12 @@ if plot_velocity_heatmap:
     # ax_hm.contour(xj,  yj, absv.reshape(ycount*factor,xcount*factor), levels=[0.4, 0.8], colors="purple", linewidths=1)
 
     # seed_points = np.array([[xk,1e-10] for xk in np.linspace(0.45, 0.6, 8)])
-    seed_points = np.array([[0.56, cutoff_laminar]])
-    sol, extrapolated, separation, reattachment = get_strml_pts(seed_points[0], xj, min_y=cutoff_laminar)
-    ax_hm.plot((x.min(), x.max()), (cutoff_laminar, cutoff_laminar), "k--", linewidth=0.5)
-    ax_hm.plot((x.min(), x.max()), (cutoff_turbulent, cutoff_turbulent), "k--", linewidth=0.5)
+    seed_points = np.array([[0.56, cutoff]])
+    sol, extrapolated, separation, reattachment = get_strml_pts(seed_points[0], xj, min_y=cutoff)
+    ax_hm.plot((x.min(), x.max()), (cutoff, cutoff), "k--", linewidth=0.5)
+    ax_hm.plot((x.min(), x.max()), (cutoff, cutoff), "k--", linewidth=0.5)
+    if include_streamplot:
+        ax_hm.streamplot(xi, yi, uCi.reshape((xcount, ycount)).T, vCi.reshape((xcount, ycount)).T, color="gray", linewidth=0.5, density=1, arrowstyle="->", arrowsize=1, broken_streamlines=False)
     ax_hm.streamplot(xi, yi, uCi.reshape((xcount, ycount)).T, vCi.reshape((xcount, ycount)).T, color="black", cmap=vccsm, linewidth=1, density=2, arrowstyle="->", arrowsize=1.5, start_points=seed_points, broken_streamlines=False)
     # sol, intpl = gen_strmln(seed_points[0], min_y=cutoff_turbulent)
     # print(sol)
@@ -139,27 +142,61 @@ if plot_velocity_heatmap:
 
     if include_slider:
         fig_hm.subplots_adjust(left=0.25, bottom=0.25)
-        ax_slider = fig_hm.add_axes([0.25, 0.1, 0.65, 0.03])
+        ax_seed = fig_hm.add_axes([0.25, 0.1, 0.65, 0.03])
+        ax_divider = fig_hm.add_axes([0.1, 0.25, 0.0225, 0.63])
         seed_slider = Slider(
-            ax=ax_slider,
-            label="Seed Point (x value)",
+            ax=ax_seed,
+            label="Seed Point (x/c)",
             valmin=0.54,
             valmax=0.58,
             valinit=seed_points[0,0],
             orientation="horizontal"
         )
-        septxt = ax_slider.text(0, -1, f"Separation: {separation[0]}", transform=ax_slider.transAxes)
-        attachtxt = ax_slider.text(0, -2, f"Reattachment: {reattachment[0]}", transform=ax_slider.transAxes)
+        divider_slider = Slider(
+            ax=ax_divider,
+            label="Cutoff Line (y/c)",
+            valmin=0.006,
+            valmax=0.009,
+            valinit=cutoff,
+            orientation="vertical"
+        )
+        septxt = ax_seed.text(0, -1, f"Separation: {separation[0]}", transform=ax_seed.transAxes)
+        attachtxt = ax_seed.text(0, -2, f"Reattachment: {reattachment[0]}", transform=ax_seed.transAxes)
+
+        def new_seed(strml_points, new_y):
+            idxmax = np.argmax(strml_points[:,1])
+            intpl = interp1d(strml_points[:idxmax+1,1], strml_points[:idxmax+1,0], kind=intpl_method, fill_value="extrapolate")
+            return intpl(new_y)
+
         def update(val):
+            global cutoff, extrapolated
             extent = ax_hm.axis()
             ax_hm.cla()
             ax_hm.imshow(absv[::-1,:], extent=(piv_data[-1,0], piv_data[0,0], piv_data[-1,1], piv_data[0,1]), cmap=hmcm, norm=norm, interpolation="nearest", aspect="auto")
             ax_hm.set_xlabel("x/c [-]")
             ax_hm.set_ylabel("y/c [-]")
-            seed_points = np.array([[val, cutoff_laminar]])
-            sol, extrapolated, separation, reattachment = get_strml_pts(seed_points[0], xj, min_y=cutoff_laminar)
-            ax_hm.plot((x.min(), x.max()), (cutoff_laminar, cutoff_laminar), "k--", linewidth=0.5)
-            ax_hm.plot((x.min(), x.max()), (cutoff_turbulent, cutoff_turbulent), "k--", linewidth=0.5)
+            seed_x = seed_slider.val
+
+            if cutoff != divider_slider.val:
+                seed_x = new_seed(extrapolated, divider_slider.val)
+                pts_min = get_strml_pts([seed_slider.valmin, cutoff], xj, min_y=cutoff)[1]
+                new_min = new_seed(pts_min, divider_slider.val)
+                pts_max = get_strml_pts([seed_slider.valmax, cutoff], xj, min_y=cutoff)[1]
+                new_max = new_seed(pts_max, divider_slider.val)
+                seed_slider.eventson = False
+                seed_slider.set_val(seed_x)
+                seed_slider.valmin = new_min
+                seed_slider.valmax = new_max
+                seed_slider.ax.set_xlim(seed_slider.valmin,seed_slider.valmax)
+                seed_slider.eventson = True
+                cutoff = divider_slider.val
+
+            seed_points = np.array([[seed_x, cutoff]])
+            sol, extrapolated, separation, reattachment = get_strml_pts(seed_points[0], xj, min_y=cutoff)
+            ax_hm.plot((x.min(), x.max()), (cutoff, cutoff), "k--", linewidth=0.5)
+            ax_hm.plot((x.min(), x.max()), (cutoff, cutoff), "k--", linewidth=0.5)
+            if include_streamplot:
+                ax_hm.streamplot(xi, yi, uCi.reshape((xcount, ycount)).T, vCi.reshape((xcount, ycount)).T, color="gray", linewidth=0.5, density=1, arrowstyle="->", arrowsize=1, broken_streamlines=False)
             ax_hm.streamplot(xi, yi, uCi.reshape((xcount, ycount)).T, vCi.reshape((xcount, ycount)).T, color="black", cmap=vccsm, linewidth=1, density=2, arrowstyle="->", arrowsize=1.5, start_points=seed_points, broken_streamlines=False)
             ax_hm.plot(extrapolated[:,0], extrapolated[:,1], "r--")
             ax_hm.plot(sol[0], sol[1], "r-")
@@ -170,6 +207,7 @@ if plot_velocity_heatmap:
             ax_hm.axis(extent)
         
         seed_slider.on_changed(update)
+        divider_slider.on_changed(update)
 
 
 
