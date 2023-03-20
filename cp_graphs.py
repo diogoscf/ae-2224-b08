@@ -4,9 +4,10 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from load_data import cp_data
 import scipy as sc
-
+from scipy.interpolate import UnivariateSpline
 
 #fit linear regression pressure plateau
+
 x0= cp_data[14:18, 0].reshape(-1,1)
 y0=cp_data[14:18, 1]
 
@@ -54,13 +55,42 @@ b3 = model3.intercept_
 
 
 
-# cubic spline interpolation
-x1_sp = x1.reshape(1,-1)[0]
-y1_sp = y1
+# quadratic interpolation
+x22 = cp_data[21:27, 0]
+y22 = cp_data[21:27, 1]
+sq_model0 = np.poly1d(np.polyfit(x0.reshape(1,-1)[0], y0, 2))
 
 
-c_spline1 = sc.interpolate.CubicSpline(x1_sp, y1, bc_type='clamped')
 
+x22_ex = np.linspace(float(cp_data[21, 0]), float(cp_data[26,0]), 100)
+sq_model2 = np.poly1d(np.polyfit(x22, y22, len(x22)-1))
+y22_ex = sq_model2(x22)
+y_spl = UnivariateSpline(x22,y22,s=0)
+y_spl_2d = y_spl.derivative(n=2)
+
+
+
+#Chebychev-Gauss grid:
+
+cheb_g = np.polynomial.chebyshev.chebgauss(50)[0]
+
+for i in range(1, len(cheb_g)+1):
+    cheb_g[len(cheb_g)-i] = np.mean(x22)+(x22[-1]-x22[0])*cheb_g[i-1]/2
+cheb_g = np.mean(x22) + (x22[-1]-x22[0])*np.polynomial.chebyshev.chebgauss(50)[0]/2
+cheb_g = cheb_g[::-1]
+y_extr = UnivariateSpline(x22,y22,s=0, k=1)
+y_cheb_g = y_extr(cheb_g)
+
+#cubic spline interpolation on Chebychev
+
+cheb_model=UnivariateSpline(cheb_g,y_cheb_g,s=0, k=3)
+cheb_model_2nd = cheb_model.derivative(n=2)
+
+#fifth order poly interpolation on Chebychev
+
+sq_model_cheb = np.poly1d(np.polyfit(cheb_g, y_cheb_g, 5))
+sq_model_cheb_sp = UnivariateSpline(cheb_g,sq_model_cheb(cheb_g),s=0, k=5)
+sq_model_cheb_2nd = sq_model_cheb_sp.derivative(n=2)
 
 def location(feature):
 
@@ -83,9 +113,19 @@ fig_cp, ax_cp = plt.subplots()
 ax_cp.plot(cp_data[:, 0], cp_data[:, 1], label="CP suction side", marker="o")
 ax_cp.plot(cp_data[12:19,0], a0*cp_data[12:19,0]+b0, label=f"linear regression, $R^{2} ={float(rsq0):.4f}$", marker = "s")
 ax_cp.plot(cp_data[16:24,0], a1*cp_data[16:24,0]+b1, label=f"linear regression pressure plateau, $a_1 = {float(a1):.4f}$, $R^{2} = {float(rsq1):.4f}$", marker = "v")
-ax_cp.plot(cp_data[22:26,0], a2*cp_data[22:26,0]+b2, label=f"linear regression pressure recovery, $R^{2} ={float(rsq2):.4f}$", marker = "X")
-ax_cp.plot(cp_data[23:27,0], a3*cp_data[23:27,0]+b3, label=f"linear regression pressure , $R^{2} ={float(rsq3):.4f}$", marker = "|")
+'''ax_cp.plot(cp_data[22:26,0], a2*cp_data[22:26,0]+b2, label=f"linear regression pressure recovery, $R^{2} ={float(rsq2):.4f}$", marker = "X")
+ax_cp.plot(cp_data[23:27,0], a3*cp_data[23:27,0]+b3, label=f"linear regression pressure , $R^{2} ={float(rsq3):.4f}$", marker = "|")'''
 
+#ax_cp.plot(cheb_g, cheb_model(cheb_g), label=f"quadratic regression", marker = "o")
+#ax_cp.plot(cheb_g, sq_model_cheb(cheb_g), label=f"quadratic regression", marker = "X")
+#ax_cp.plot(cheb_g, cheb_model_2nd(cheb_g), label=f"quadratic regression", marker = "o")
+ax_cp.plot(cheb_g, sq_model_cheb_2nd(cheb_g), label=f"quadratic regression", marker = "X")
+
+#ax_cp.plot(cp_data[8:23,0], sq_model0(cp_data[8:23,0]), label=f"quadratic regression", marker = "o")
+#ax_cp.plot(x22_ex, sq_model2(x22_ex), label=f"quadratic regression", marker = "o")
+#ax_cp.plot(x22_ex, y_spl(x22_ex), label=f"quadratic regression", marker = "o")
+#ax_cp.plot(x22_ex[:75], y_spl_2d(x22_ex[:75]), label=f"quadratic regression", marker = "o")
+'''ax_cp.plot(cp_data[10:24,0], sq_model1(cp_data[10:24,0]), label=f"quadratic regression", marker = "o")'''
 
 ax_cp.plot(location("separation"), a1*location("separation")+b1, markersize = 10, color='black', marker="o")
 ax_cp.plot(location("transition"), a1*location("transition")+b1, markersize = 10, color='black', marker="o")
@@ -93,9 +133,9 @@ ax_cp.plot(location("reattachment"), a2*location("reattachment")+b2, markersize 
 ax_cp.axvline(location("separation"), c='black', ls = '--', linewidth = 0.8)
 ax_cp.axvline(location("transition"), c='black', ls = '--', linewidth = 0.8)
 ax_cp.axvline(location("reattachment"), c='black', ls = '--', linewidth = 0.8)
-ax_cp.annotate('separation', xy=(location("separation"), a1*location("separation")+b1), xytext=(0.4,-0.6), arrowprops=dict(facecolor='black', width = 1, headwidth = 5, shrink=0.05))
+'''ax_cp.annotate('separation', xy=(location("separation"), a1*location("separation")+b1), xytext=(0.4,-0.6), arrowprops=dict(facecolor='black', width = 1, headwidth = 5, shrink=0.05))
 ax_cp.annotate('transition', xy=(location("transition"), a1*location("transition")+b1), xytext=(0.75,-1.1), arrowprops=dict(facecolor='black', width=1, headwidth = 5, shrink=0.05))
-ax_cp.annotate('reattachment', xy=(location("reattachment"), a2*location("reattachment")+b2), xytext=(0.78,-0.6), arrowprops=dict(facecolor='black', width=1, headwidth = 5, shrink=0.05))
+ax_cp.annotate('reattachment', xy=(location("reattachment"), a2*location("reattachment")+b2), xytext=(0.78,-0.6), arrowprops=dict(facecolor='black', width=1, headwidth = 5, shrink=0.05))'''
 
 ax_cp.invert_yaxis()
 #ax_cp.set_title("Cp graph on the suction side of a NACA 643-618 for AoA 2°, Re = 200 000")
@@ -117,3 +157,4 @@ plt.show()
 print(f'Separation location (x/c): {float(location("separation")):.3f}')        
 print(f'Transition location (x/c): {float(location("transition")):.3f}')
 print(f'Reattachment location (x/c): {float(location("reattachment")):.3f}')
+
