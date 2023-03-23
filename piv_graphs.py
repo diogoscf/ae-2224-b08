@@ -16,13 +16,20 @@ plot_vector_field = False
 plot_velocity_heatmap = True
 plot_streamlines = False
 plot_individual_streamline = False
-plot_transition = False
-include_slider = False
+plot_transition_graph = False
+include_slider = True
 discrete_colormap = True
 include_streamplot = True
 error_bar = False
 heatmap_velocity = "x"  # "x" or "absolute" or "absx"
 intpl_method = "linear"  # "linear", "cubic", "quadratic"
+thicknesses_in_heatmap = {
+    "δ_max": [True, "c-"],
+    "δ*": [True, "m-"],
+    "θ*": [True, "w-"],
+    "δ_99": [True, "g-"],
+    "δ_95": [True, "y-"],
+}
 
 xcount, ycount = 395, 57
 ylim = 57
@@ -131,6 +138,51 @@ def away_from_zero(a, precision=0):
     )
 
 
+delta_max = np.array(
+    [[np.unique(Y)[i], i] for i in np.argmax(U_grid, axis=1)]
+)  # point of maximum velocity along span
+delta_star = []
+delta_99 = []
+delta_95 = []
+theta_star = []
+for j, (dmax, i) in enumerate(delta_max):
+    i = int(i)
+    umax = U_grid[j, i]
+    d99, d95 = 0, 0
+    for k, uj in enumerate(U_grid[j, : i + 1]):
+        if uj > 0.95 * 1 and d95 == 0:
+            d95 = np.unique(Y)[k]
+        if uj > 0.99 * 1:
+            d99 = np.unique(Y)[k]
+            break
+    dstar = simpson(
+        [(1 - (uj / umax)) for uj in U_grid[j, : i + 1]], np.unique(Y)[: i + 1]
+    )
+    thstar = simpson(
+        [(uj / umax) * (1 - (uj / umax)) for uj in U_grid[j, : i + 1]],
+        np.unique(Y)[: i + 1],
+    )
+    # print(dstar, thstar)
+    delta_95.append(d95)
+    delta_99.append(d99)
+    delta_star.append(dstar)
+    theta_star.append(thstar)
+
+delta_star, theta_star, delta_99, delta_95 = (
+    np.array(delta_star),
+    np.array(theta_star),
+    np.array(delta_99),
+    np.array(delta_95),
+)
+H12 = delta_star / theta_star
+transition = np.unique(X)[np.argmax(H12)]
+
+thicknesses_in_heatmap["δ_max"].append(delta_max[:, 0])
+thicknesses_in_heatmap["δ_99"].append(delta_99)
+thicknesses_in_heatmap["δ_95"].append(delta_95)
+thicknesses_in_heatmap["δ*"].append(delta_star)
+thicknesses_in_heatmap["θ*"].append(theta_star)
+
 if plot_velocity_heatmap:
     # absv = np.linalg.norm(np.column_stack((u, v)), axis=1)
     # absv = np.abs(u)
@@ -238,10 +290,25 @@ if plot_velocity_heatmap:
             ms=7,
             capsize=3,
         )
+    for label, (plot, style, data) in thicknesses_in_heatmap.items():
+        # print(label, plot, style, data.shape)
+        if plot:
+            ax_hm.plot(np.unique(X), data, style, label=label)
+
     ax_hm.plot(extrapolated[:, 0], extrapolated[:, 1], "r--")
     ax_hm.plot(sol[0], sol[1], "r-")
     ax_hm.plot(seed_points[:, 0], seed_points[:, 1], "bo", markersize=3)
     ax_hm.plot((separation[0], reattachment[0]), (separation[1], reattachment[1]), "ro")
+
+    if any([x[0] for x in thicknesses_in_heatmap.values()]):
+        ax_hm.legend(loc="upper right")
+
+    if not include_slider:
+        print(f"Separation point   : {np.round(separation[0], 3)} ({separation[0]})")
+        print(f"Transition point   : {np.round(transition, 3)} ({transition})")
+        print(
+            f"Reattachment point : {np.round(reattachment[0], 3)} ({reattachment[0]})"
+        )
 
     if include_slider:
         fig_hm.subplots_adjust(left=0.25, bottom=0.25)
@@ -263,12 +330,41 @@ if plot_velocity_heatmap:
             valinit=cutoff,
             orientation="vertical",
         )
-        septxt = ax_seed.text(
-            0, -1, f"Separation: {separation[0]}", transform=ax_seed.transAxes
+        text = [
+            ["Separation point: ", f"{np.round(separation[0], 3)} ({separation[0]})"],
+            ["Transition point: ", f"{np.round(transition, 3)} ({transition})"],
+            [
+                "Reattachment point: ",
+                f"{np.round(reattachment[0], 3)} ({reattachment[0]})",
+            ],
+        ]
+        txt_table = ax_seed.table(
+            text,
+            cellLoc="left",
+            colWidths=[0.5, 0.5],
+            transform=ax_seed.transAxes,
+            bbox=[0, -3, 1, 3],
+            edges="",
         )
-        attachtxt = ax_seed.text(
-            0, -2, f"Reattachment: {reattachment[0]}", transform=ax_seed.transAxes
-        )
+
+        # septxt = ax_seed.text(
+        #     0,
+        #     -1,
+        #     f"Separation point   : {np.round(separation[0], 3)} ({separation[0]})",
+        #     transform=ax_seed.transAxes,
+        # )
+        # trnsttxt = ax_seed.text(
+        #     0,
+        #     -2,
+        #     f"Transition point   : {np.round(transition, 3)} ({transition})",
+        #     transform=ax_seed.transAxes,
+        # )
+        # attachtxt = ax_seed.text(
+        #     0,
+        #     -3,
+        #     f"Reattachment point : {np.round(reattachment[0], 3)} ({reattachment[0]})",
+        #     transform=ax_seed.transAxes,
+        # )
 
         def new_seed(strml_points, new_y):
             idxmax = np.argmax(strml_points[:, 1])
@@ -373,14 +469,25 @@ if plot_velocity_heatmap:
                     ms=7,
                     capsize=3,
                 )
+            for label, (plot, style, data) in thicknesses_in_heatmap.items():
+                if plot:
+                    ax_hm.plot(np.unique(X), data, style, label=label)
+
             ax_hm.plot(extrapolated[:, 0], extrapolated[:, 1], "r--")
             ax_hm.plot(sol[0], sol[1], "r-")
             ax_hm.plot(seed_points[:, 0], seed_points[:, 1], "bo", markersize=3)
             ax_hm.plot(
                 (separation[0], reattachment[0]), (separation[1], reattachment[1]), "ro"
             )
-            septxt.set_text(f"Separation: {separation[0]}")
-            attachtxt.set_text(f"Reattachment: {reattachment[0]}")
+            txt_table.get_celld()[(0, 1)].get_text().set_text(
+                f"{np.round(separation[0], 3)} ({separation[0]})"
+            )
+            txt_table.get_celld()[(2, 1)].get_text().set_text(
+                f"{np.round(reattachment[0], 3)} ({reattachment[0]})"
+            )
+            # trnsttxt.set_text(f"Transition: {transition}")
+            if any([x[0] for x in thicknesses_in_heatmap.values()]):
+                ax_hm.legend(loc="upper right")
             ax_hm.axis(extent)
 
         seed_slider.on_changed(update)
@@ -446,40 +553,7 @@ if plot_individual_streamline:
     ax_strm.plot(seed_point.T[0], seed_point.T[1], "bo")
     plt.colorbar(sm, ax=ax_strm, label="Absolute velocity [1/U$_{inf}$]")
 
-if plot_transition:
-    # print(xy_points.reshape((xcount, ycount, 2)))
-    delta_max = np.array(
-        [[np.unique(Y)[i], i] for i in np.argmax(U_grid, axis=1)]
-    )  # point of maximum velocity along span
-    delta_star = []
-    delta_99 = []
-    delta_95 = []
-    theta_star = []
-    for j, (dmax, i) in enumerate(delta_max):
-        i = int(i)
-        umax = U_grid[j, i]
-        d99, d95 = 0, 0
-        for k, uj in enumerate(U_grid[j, : i + 1]):
-            if uj > 0.95 * umax and d95 == 0:
-                d95 = np.unique(Y)[k]
-            if uj > 0.99 * umax:
-                d99 = np.unique(Y)[k]
-                break
-        dstar = simpson(
-            [(1 - (uj / umax)) for uj in U_grid[j, : i + 1]], np.unique(Y)[: i + 1]
-        )
-        thstar = simpson(
-            [(uj / umax) * (1 - (uj / umax)) for uj in U_grid[j, : i + 1]],
-            np.unique(Y)[: i + 1],
-        )
-        # print(dstar, thstar)
-        delta_95.append(d95)
-        delta_99.append(d99)
-        delta_star.append(dstar)
-        theta_star.append(thstar)
-
-    delta_star = np.array(delta_star)
-    theta_star = np.array(theta_star)
+if plot_transition_graph:
     fig_trnst, ax_trnst = plt.subplots()
     plt1 = ax_trnst.plot(np.unique(X), delta_max[:, 0], "k-", label="$\delta_{max}$")
     plt2 = ax_trnst.plot(np.unique(X), delta_star, "r-", label="$\delta{*}$")
@@ -488,13 +562,12 @@ if plot_transition:
     plt5 = ax_trnst.plot(np.unique(X), delta_95, "y-", label="$\delta_{95}$")
     ax_trnst.set_xlabel("x/c [-]")
     ax_trnst.set_ylabel("y/c [-]")
-    # ax_trnst.legend()
-    H12 = delta_star / theta_star
-    transition = np.unique(X)[np.argmax(H12)]
+    ax_trnst.set(ylim=(0, ymax), xlim=(xmin, xmax))
     print("Transition point: ", transition)
     ax_trnst_2 = ax_trnst.twinx()
     plt6 = ax_trnst_2.plot(np.unique(X), H12, "m-", label="H$_{12}$")
     ax_trnst_2.set_ylabel("H$_{12}$ [-]")
+    ax_trnst_2.set(ylim=(ymin, np.max(H12) * 1.03))
 
     lns = plt1 + plt2 + plt3 + plt4 + plt5 + plt6
     labs = [l.get_label() for l in lns]
