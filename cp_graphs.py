@@ -87,7 +87,7 @@ cheb_model_2nd = cheb_model.derivative(n=2)
 
 #fifth order poly interpolation on Chebychev
 
-sq_model_cheb = np.poly1d(np.polyfit(cheb_g, y_cheb_g, 5))
+sq_model_cheb = np.poly1d(np.polyfit(cheb_g, cheb_model(cheb_g), 5))
 sq_model_cheb_sp = UnivariateSpline(cheb_g,sq_model_cheb(cheb_g),s=0, k=5)
 sq_model_cheb_2nd = sq_model_cheb_sp.derivative(n=2)
 
@@ -123,36 +123,66 @@ def min_der(data):
 
 fig_cp, ax_cp = plt.subplots()
 ax_cp.plot(cp_data[:, 0], cp_data[:, 1], label="CP suction side", marker="o")
-ax_cp.plot(cp_data[12:19,0], a0*cp_data[12:19,0]+b0, label=f"linear regression, $R^{2} ={float(rsq0):.4f}$", marker = "s")
-ax_cp.plot(cp_data[16:24,0], a1*cp_data[16:24,0]+b1, label=f"linear regression pressure plateau, $a_1 = {float(a1):.4f}$, $R^{2} = {float(rsq1):.4f}$", marker = "v")
-'''ax_cp.plot(cp_data[22:26,0], a2*cp_data[22:26,0]+b2, label=f"linear regression pressure recovery, $R^{2} ={float(rsq2):.4f}$", marker = "X")
-ax_cp.plot(cp_data[23:27,0], a3*cp_data[23:27,0]+b3, label=f"linear regression pressure , $R^{2} ={float(rsq3):.4f}$", marker = "|")'''
+'''ax_cp.plot(cp_data[12:19,0], a0*cp_data[12:19,0]+b0, label=f"Linear regression, $R^{2} ={float(rsq0):.4f}$", marker = "s")
+ax_cp.plot(cp_data[16:24,0], a1*cp_data[16:24,0]+b1, label=f"Linear regression pressure plateau, $a_1 = {float(a1):.4f}$, $R^{2} = {float(rsq1):.4f}$", marker = "v")
+ax_cp.plot(cp_data[22:26,0], a2*cp_data[22:26,0]+b2, label=f"Linear regression pressure recovery, $R^{2} ={float(rsq2):.4f}$", marker = "X")
+ax_cp.plot(cp_data[23:27,0], a3*cp_data[23:27,0]+b3, label=f"Linear regression pressure , $R^{2} ={float(rsq3):.4f}$", marker = "|")'''
 
 #ax_cp.plot(cheb_g, cheb_model(cheb_g), label=f"quadratic regression", marker = "o")
-#ax_cp.plot(cheb_g, sq_model_cheb(cheb_g), label=f"quadratic regression", marker = "X")
+#ax_cp.plot(cheb_g, sq_model_cheb(cheb_g), label=f"Fifth order Chebychev regression", marker = "X")
 #ax_cp.plot(cheb_g, cheb_model_2nd(cheb_g), label=f"quadratic regression", marker = "o")
 #ax_cp.plot(cheb_g, sq_model_cheb_2nd(cheb_g), label=f"quadratic regression", marker = "X")
 
 #ax_cp.plot(cp_data[8:23,0], sq_model0(cp_data[8:23,0]), label=f"quadratic regression", marker = "o")
-#ax_cp.plot(x22_ex, sq_model2(x22_ex), label=f"quadratic regression", marker = "o")
+#ax_cp.plot(x22_ex, sq_model2(x22_ex), label=f"Fifth order regression through datapoints", marker = "o")
 #ax_cp.plot(x22_ex, y_spl(x22_ex), label=f"quadratic regression", marker = "o")
 #ax_cp.plot(x22_ex[:75], y_spl_2d(x22_ex[:75]), label=f"quadratic regression", marker = "o")
 '''ax_cp.plot(cp_data[10:24,0], sq_model1(cp_data[10:24,0]), label=f"quadratic regression", marker = "o")'''
 
-'''ax_cp.plot(location("separation"), a1*location("separation")+b1, markersize = 10, color='black', marker="o")
+ax_cp.plot(location("separation"), a1*location("separation")+b1, markersize = 10, color='black', marker="o")
 ax_cp.plot(location("transition"), a1*location("transition")+b1, markersize = 10, color='black', marker="o")
-ax_cp.plot(location("reattachment"), a2*location("reattachment")+b2, markersize = 10, color='black', marker="o")'''
-ax_cp.axvline(location("separation"), c='black', ls = '--', linewidth = 1)
+ax_cp.plot(location("reattachment"), a2*location("reattachment")+b2, markersize = 10, color='black', marker="o")
+ax_cp.axvline(location("separation"), c='black', ls = '--', linewidth = 1, label="Locations determined with linear regression")
 ax_cp.axvline(location("transition"), c='black', ls = '--', linewidth = 1)
 ax_cp.axvline(location("reattachment"), c='black', ls = '--', linewidth = 1)
 
 #location derivatives
 
-ax_cp.axvline(min_der(sq_model_cheb_2nd(cheb_g))[0], c='black', ls = ':', linewidth = 0.8)
-ax_cp.axvline(min_der(sq_model_cheb_2nd(cheb_g))[1], c='black', ls = ':', linewidth = 0.8)
+ax_cp.axvline(min_der(sq_model_cheb_2nd(cheb_g))[0], c='black', ls = ':', linewidth = 1)
+ax_cp.axvline(min_der(sq_model_cheb_2nd(cheb_g))[1], c='black', ls = ':', linewidth = 1, label="Locations determined with Chebychev polynomials")
+ax_cp.axvline(location("separation"), c='black', ls = ':', linewidth = 1)
+ax_cp.plot(location("separation"), a1*location("separation")+b1, markersize = 10, color='black', marker="o")
+ax_cp.plot(min_der(sq_model_cheb_2nd(cheb_g))[0], sq_model_cheb(min_der(sq_model_cheb_2nd(cheb_g))[0]), markersize = 10, color='black', marker="o")
+ax_cp.plot(min_der(sq_model_cheb_2nd(cheb_g))[1], sq_model_cheb(min_der(sq_model_cheb_2nd(cheb_g))[1]), markersize = 10, color='black', marker="o")
+
+y_arr=np.arange(-1.5, 1, 0.01)
+ax_cp.fill_betweenx(
+        x1=location("transition") , 
+        x2 = min_der(sq_model_cheb_2nd(cheb_g))[1], 
+        y= y_arr,
+        color= "b",
+        alpha= 0.3,
+        label= "Region of uncertainty for transition")
+ax_cp.fill_betweenx(
+        x1=location("reattachment") , 
+        x2 = min_der(sq_model_cheb_2nd(cheb_g))[0], 
+        y= y_arr,
+        color= "r",
+        alpha= 0.3,
+        label= "Region of uncertainty for reattachment")
+
+
 '''ax_cp.annotate('separation', xy=(location("separation"), a1*location("separation")+b1), xytext=(0.4,-0.6), arrowprops=dict(facecolor='black', width = 1, headwidth = 5, shrink=0.05))
+ax_cp.annotate('transition', xy=(min_der(sq_model_cheb_2nd(cheb_g))[1], sq_model_cheb(min_der(sq_model_cheb_2nd(cheb_g))[1])), xytext=(0.75,-1.1), arrowprops=dict(facecolor='black', width=1, headwidth = 5, shrink=0.05))
+ax_cp.annotate('reattachment', xy=(min_der(sq_model_cheb_2nd(cheb_g))[0], sq_model_cheb(min_der(sq_model_cheb_2nd(cheb_g))[0])), xytext=(0.78,-0.6), arrowprops=dict(facecolor='black', width=1, headwidth = 5, shrink=0.05))
+
+ax_cp.annotate('separation', xy=(location("separation"), a1*location("separation")+b1), xytext=(0.4,-0.6), arrowprops=dict(facecolor='black', width = 1, headwidth = 5, shrink=0.05))
 ax_cp.annotate('transition', xy=(location("transition"), a1*location("transition")+b1), xytext=(0.75,-1.1), arrowprops=dict(facecolor='black', width=1, headwidth = 5, shrink=0.05))
 ax_cp.annotate('reattachment', xy=(location("reattachment"), a2*location("reattachment")+b2), xytext=(0.78,-0.6), arrowprops=dict(facecolor='black', width=1, headwidth = 5, shrink=0.05))'''
+
+
+ax_cp.set_xlim(0.35,0.85)
+ax_cp.set_ylim(-1.15, 0.2)
 
 ax_cp.invert_yaxis()
 #ax_cp.set_title("Cp graph on the suction side of a NACA 643-618 for AoA 2°, Re = 200 000")
