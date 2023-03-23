@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
-
+from scipy.interpolate import CubicSpline
 from load_data import irt_data
+import pandas as pd
 
 fig_irt, ax_irt = plt.subplots()
 
@@ -42,9 +43,37 @@ for i in range(0,len(irt_array),10):
     dx1 = irt_data[1, 0] - irt_data[0, 0]
     g1 = np.gradient(irt_array[i], dx)
     ax_sec1.plot(x,g1)  
-    
+data_st = pd.read_excel(r'./St.xlsx')
+df_st = pd.DataFrame(data_st, columns=['x', 'y'])
+data_cf = pd.read_excel(r'./Cf.xlsx')
+df_cf = pd.DataFrame(data_cf, columns=['x', 'y'])
+
+spalart_dx = 0.001
+cs_st = CubicSpline(df_st["x"].to_list(),df_st["y"].to_list())
+cs_cf = CubicSpline(df_cf["x"].to_list(),df_cf["y"].to_list())
+
+xs = np.arange(0.2,7,spalart_dx)
+fig_spal, ax_spal = plt.subplots()
+ax_spal.plot(xs,cs_cf(xs))
+ax_spal.plot(xs,cs_st(xs))
+xlim = ax_spal.get_xlim()
+ylim = ax_spal.get_ylim()
+aspect = ax_spal.get_aspect()
+
+
+
+
+
+g = np.gradient(cs_st(xs),spalart_dx)
+fig_spal.add_axes([7,0.012,1,0.003])
+ax_spal.plot(xs,g)
+fig_spal_grad, ax_spal_grad = plt.subplots()
+ax_spal_grad.plot(xs,g)
+
 # g2 = -g
 # ax_grad.plot(np.unique(irt_data[0:-1, 0]), g2, color="green", marker=".", linestyle="none")
+ax_spal.set_xlim(2*np.array(xlim))
+ax_spal.set_ylim(2*np.array(ylim))
 
 plt.show()
 
