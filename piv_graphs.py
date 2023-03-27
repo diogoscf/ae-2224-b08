@@ -3,6 +3,7 @@ import matplotlib.cm as cm
 from matplotlib.colors import Normalize, LinearSegmentedColormap, BoundaryNorm
 from matplotlib.widgets import Slider
 import numpy as np
+import argparse
 from scipy.interpolate import RegularGridInterpolator, interp1d
 from scipy.integrate import solve_ivp, simpson
 
@@ -12,17 +13,6 @@ from load_data import piv_data
 vccsm = cm.turbo  # coolwarm, turbo, jet
 hmcm = cm.jet  # coolwarm, turbo, jet
 
-plot_vector_field = False
-plot_velocity_heatmap = True
-plot_streamlines = False
-plot_individual_streamline = False
-plot_transition_graph = False
-include_slider = True
-discrete_colormap = True
-include_streamplot = True
-error_bar = False
-heatmap_velocity = "x"  # "x" or "absolute" or "absx"
-intpl_method = "linear"  # "linear", "cubic", "quadratic"
 thicknesses_in_heatmap = {
     "δ_max": [True, "c-"],
     "δ*": [True, "m-"],
@@ -36,6 +26,7 @@ ylim = 57
 minl = (57 - ylim) * 395
 step = 20  # Resolution
 x, y = piv_data[:, 0], piv_data[:, 1]
+# print((x.max() - x.min()) / (xcount - 1))
 xmin, xmax = x.min() / 1.02, x.max() * 1.02
 ymin, ymax = -0.001, y.max() * 1.03
 u, v = piv_data[:, 2], piv_data[:, 3]
@@ -50,7 +41,8 @@ colors = np.linalg.norm(np.column_stack((U, V)), axis=1)
 norm = Normalize()
 norm.autoscale(colors)
 
-if plot_vector_field:
+
+def plot_vector_field():
     fig_piv, ax_piv = plt.subplots()
     ax_piv.quiver(
         X,
@@ -73,6 +65,7 @@ if plot_vector_field:
     sm = cm.ScalarMappable(cmap=vccsm, norm=norm)
     sm.set_array([])
     plt.colorbar(sm, ax=ax_piv, label="Absolute velocity [1/U$_{inf}$]")
+
 
 sorted_data = piv_data[np.lexsort((piv_data[:, 1], piv_data[:, 0]))]
 X, Y = sorted_data[:, 0], sorted_data[:, 1]
@@ -100,7 +93,7 @@ def f(t, xy):
     return np.squeeze([u_intpl(xy), v_intpl(xy)])
 
 
-def gen_strmln(seed_point, min_y=y.min()):
+def gen_strmln(seed_point, min_y=y.min(), intpl_method="linear"):
     sol = solve_ivp(
         f,
         [0, 10],
@@ -125,11 +118,12 @@ def gen_strmln(seed_point, min_y=y.min()):
     return positions, intpl
 
 
-def get_strml_pts(seed_point, xspace, min_y=y.min()):
-    positions, intpl = gen_strmln(seed_point, min_y)
+def get_strml_pts(seed_point, xspace, min_y=y.min(), intpl_method="linear"):
+    positions, intpl = gen_strmln(seed_point, min_y, intpl_method=intpl_method)
     extrapolated = np.array([[xk, intpl(xk)] for xk in xspace if intpl(xk) > y.min()])
     separation, reattachment = extrapolated[0, :], extrapolated[-1, :]
-    return positions, extrapolated, separation, reattachment
+    transition = positions[:, np.argmax(positions[1, :])]
+    return positions, extrapolated, separation, reattachment, transition
 
 
 def away_from_zero(a, precision=0):
@@ -174,8 +168,11 @@ delta_star, theta_star, delta_99, delta_95 = (
     np.array(delta_99),
     np.array(delta_95),
 )
+
 H12 = delta_star / theta_star
-transition = np.unique(X)[np.argmax(H12)]
+transition_h12 = np.unique(X)[np.argmax(H12)]
+transition_delta_star = np.unique(X)[np.argmax(delta_star)]
+transition = transition_h12
 
 thicknesses_in_heatmap["δ_max"].append(delta_max[:, 0])
 thicknesses_in_heatmap["δ_99"].append(delta_99)
@@ -183,7 +180,16 @@ thicknesses_in_heatmap["δ_95"].append(delta_95)
 thicknesses_in_heatmap["δ*"].append(delta_star)
 thicknesses_in_heatmap["θ*"].append(theta_star)
 
-if plot_velocity_heatmap:
+
+def plot_velocity_heatmap(
+    heatmap_velocity="x",
+    include_slider=False,
+    discrete_colormap=False,
+    include_streamplot=False,
+    error_bar=False,
+    intpl_method="linear",
+):
+    global hmcm
     # absv = np.linalg.norm(np.column_stack((u, v)), axis=1)
     # absv = np.abs(u)
     factor = 10  # Resolution increase
@@ -233,8 +239,8 @@ if plot_velocity_heatmap:
 
     # seed_points = np.array([[xk,1e-10] for xk in np.linspace(0.45, 0.6, 8)])
     seed_points = np.array([[seed_x_init, cutoff]])
-    sol, extrapolated, separation, reattachment = get_strml_pts(
-        seed_points[0], xj, min_y=cutoff
+    sol, extrapolated, separation, reattachment, transition = get_strml_pts(
+        seed_points[0], xj, min_y=cutoff, intpl_method=intpl_method
     )
     ax_hm.plot((x.min(), x.max()), (cutoff, cutoff), "k--", linewidth=0.5)
     if include_streamplot:
@@ -298,14 +304,18 @@ if plot_velocity_heatmap:
     ax_hm.plot(extrapolated[:, 0], extrapolated[:, 1], "r--")
     ax_hm.plot(sol[0], sol[1], "r-")
     ax_hm.plot(seed_points[:, 0], seed_points[:, 1], "bo", markersize=3)
-    ax_hm.plot((separation[0], reattachment[0]), (separation[1], reattachment[1]), "ro")
+    ax_hm.plot(
+        (separation[0], reattachment[0], transition[0]),
+        (separation[1], reattachment[1], transition[1]),
+        "ro",
+    )
 
     if any([x[0] for x in thicknesses_in_heatmap.values()]):
         ax_hm.legend(loc="upper right")
 
     if not include_slider:
         print(f"Separation point   : {np.round(separation[0], 3)} ({separation[0]})")
-        print(f"Transition point   : {np.round(transition, 3)} ({transition})")
+        print(f"Transition point   : {np.round(transition[0], 3)} ({transition[0]})")
         print(
             f"Reattachment point : {np.round(reattachment[0], 3)} ({reattachment[0]})"
         )
@@ -332,7 +342,7 @@ if plot_velocity_heatmap:
         )
         text = [
             ["Separation point: ", f"{np.round(separation[0], 3)} ({separation[0]})"],
-            ["Transition point: ", f"{np.round(transition, 3)} ({transition})"],
+            ["Transition point: ", f"{np.round(transition[0], 3)} ({transition[0]})"],
             [
                 "Reattachment point: ",
                 f"{np.round(reattachment[0], 3)} ({reattachment[0]})",
@@ -399,14 +409,20 @@ if plot_velocity_heatmap:
 
             if cutoff != divider_slider.val:
                 seed_x = new_seed(extrapolated, divider_slider.val)
-                pts_min = get_strml_pts([seed_slider.valmin, cutoff], xj, min_y=cutoff)[
-                    1
-                ]
-                new_min = new_seed(pts_min, divider_slider.val)
-                pts_max = get_strml_pts([seed_slider.valmax, cutoff], xj, min_y=cutoff)[
-                    1
-                ]
-                new_max = new_seed(pts_max, divider_slider.val)
+                minpt = get_strml_pts(
+                    [seed_slider.valmin, cutoff],
+                    xj,
+                    min_y=cutoff,
+                    intpl_method=intpl_method,
+                )[1]
+                new_min = new_seed(minpt, divider_slider.val)
+                maxpt = get_strml_pts(
+                    [seed_slider.valmax, cutoff],
+                    xj,
+                    min_y=cutoff,
+                    intpl_method=intpl_method,
+                )[1]
+                new_max = new_seed(maxpt, divider_slider.val)
                 seed_slider.eventson = False
                 seed_slider.set_val(seed_x)
                 seed_slider.valmin = new_min
@@ -416,8 +432,8 @@ if plot_velocity_heatmap:
                 cutoff = divider_slider.val
 
             seed_points = np.array([[seed_x, cutoff]])
-            sol, extrapolated, separation, reattachment = get_strml_pts(
-                seed_points[0], xj, min_y=cutoff
+            sol, extrapolated, separation, reattachment, transition = get_strml_pts(
+                seed_points[0], xj, min_y=cutoff, intpl_method=intpl_method
             )
             ax_hm.plot((x.min(), x.max()), (cutoff, cutoff), "k--", linewidth=0.5)
             ax_hm.plot((x.min(), x.max()), (cutoff, cutoff), "k--", linewidth=0.5)
@@ -477,15 +493,19 @@ if plot_velocity_heatmap:
             ax_hm.plot(sol[0], sol[1], "r-")
             ax_hm.plot(seed_points[:, 0], seed_points[:, 1], "bo", markersize=3)
             ax_hm.plot(
-                (separation[0], reattachment[0]), (separation[1], reattachment[1]), "ro"
+                (separation[0], reattachment[0], transition[0]),
+                (separation[1], reattachment[1], transition[1]),
+                "ro",
             )
             txt_table.get_celld()[(0, 1)].get_text().set_text(
                 f"{np.round(separation[0], 3)} ({separation[0]})"
             )
+            txt_table.get_celld()[(1, 1)].get_text().set_text(
+                f"{np.round(transition[0], 3)} ({transition[0]})"
+            )
             txt_table.get_celld()[(2, 1)].get_text().set_text(
                 f"{np.round(reattachment[0], 3)} ({reattachment[0]})"
             )
-            # trnsttxt.set_text(f"Transition: {transition}")
             if any([x[0] for x in thicknesses_in_heatmap.values()]):
                 ax_hm.legend(loc="upper right")
             ax_hm.axis(extent)
@@ -494,7 +514,7 @@ if plot_velocity_heatmap:
         divider_slider.on_changed(update)
 
 
-if plot_streamlines:
+def plot_streamlines():
     fig_strm, ax_strm = plt.subplots()
     colour = speed.reshape((xcount, ycount)).T
     ax_strm.streamplot(
@@ -516,7 +536,8 @@ if plot_streamlines:
     sm.set_array([])
     plt.colorbar(sm, ax=ax_strm, label="Absolute velocity [1/U$_{inf}$]")
 
-if plot_individual_streamline:
+
+def plot_individual_streamline():
     seed_point = np.array([[0.55, 1e-10]])
     fig_strm, ax_strm = plt.subplots()
     # colour = speed.reshape((xcount, ycount)).T
@@ -553,7 +574,8 @@ if plot_individual_streamline:
     ax_strm.plot(seed_point.T[0], seed_point.T[1], "bo")
     plt.colorbar(sm, ax=ax_strm, label="Absolute velocity [1/U$_{inf}$]")
 
-if plot_transition_graph:
+
+def plot_transition_graph():
     fig_trnst, ax_trnst = plt.subplots()
     plt1 = ax_trnst.plot(np.unique(X), delta_max[:, 0], "k-", label="$\delta_{max}$")
     plt2 = ax_trnst.plot(np.unique(X), delta_star, "r-", label="$\delta{*}$")
@@ -563,7 +585,8 @@ if plot_transition_graph:
     ax_trnst.set_xlabel("x/c [-]")
     ax_trnst.set_ylabel("y/c [-]")
     ax_trnst.set(ylim=(0, ymax), xlim=(xmin, xmax))
-    print("Transition point: ", transition)
+    print("Transition point (Shape Factor): ", transition_h12)
+    print("Transition point (δ*): ", transition_delta_star)
     ax_trnst_2 = ax_trnst.twinx()
     plt6 = ax_trnst_2.plot(np.unique(X), H12, "m-", label="H$_{12}$")
     ax_trnst_2.set_ylabel("H$_{12}$ [-]")
@@ -573,4 +596,152 @@ if plot_transition_graph:
     labs = [l.get_label() for l in lns]
     ax_trnst.legend(lns, labs, loc=0)
 
-plt.show()
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
+
+class CommandLine:
+    def __init__(self):
+        parser = argparse.ArgumentParser(description="Graphs for PIV Data Analysis")
+        parser.add_argument(
+            "--plot-heatmap",
+            help="Whether to plot the velocity heatmap (Default: False)",
+            required=False,
+            default=False,
+            const=True,
+            nargs="?",
+            type=str2bool,
+        )
+
+        parser.add_argument(
+            "--plot-vector-field",
+            help="Whether to plot the vector field (Default: False)",
+            required=False,
+            default=False,
+            const=True,
+            nargs="?",
+            type=str2bool,
+        )
+
+        parser.add_argument(
+            "--plot-streamlines",
+            help="Whether to plot the streamlines (Default: False)",
+            required=False,
+            default=False,
+            const=True,
+            nargs="?",
+            type=str2bool,
+        )
+
+        parser.add_argument(
+            "--plot-individual-streamline",
+            help="Whether to plot the individual seeded streamline (Default: False)",
+            required=False,
+            default=False,
+            const=True,
+            nargs="?",
+            type=str2bool,
+        )
+
+        parser.add_argument(
+            "--plot-transition",
+            help="Whether to plot the transition graph (Default: False)",
+            required=False,
+            default=False,
+            const=True,
+            nargs="?",
+            type=str2bool,
+        )
+
+        parser.add_argument(
+            "--heatmap-velocity",
+            help="Which velocity to use on the heatmap (x, absx or absolute). Default: x",
+            required=False,
+            default="x",
+        )
+        parser.add_argument(
+            "--include-slider",
+            help="Whether to include the slider in the heatmap (Default: False)",
+            required=False,
+            default=False,
+            const=True,
+            nargs="?",
+            type=str2bool,
+        )
+        parser.add_argument(
+            "--discrete-colormap",
+            help="Whether to use a discrete colormap (Default: True)",
+            required=False,
+            default=True,
+            const=True,
+            nargs="?",
+            type=str2bool,
+        )
+
+        parser.add_argument(
+            "--include-streamplot",
+            help="Whether to include a streamline plot in the heatmap (Default: True)",
+            required=False,
+            default=True,
+            const=True,
+            nargs="?",
+            type=str2bool,
+        )
+
+        parser.add_argument(
+            "--intpl-method",
+            help="Which interpolation method to use for the streamlines (linear, quadratic, cubic). Default: linear",
+            required=False,
+            default="linear",
+        )
+        error_bar = (False,)
+
+        argument = parser.parse_args()
+        status = False
+        # print(argument)
+
+        if argument.plot_heatmap:
+            plot_velocity_heatmap(
+                heatmap_velocity=argument.heatmap_velocity,
+                include_slider=argument.include_slider,
+                discrete_colormap=argument.discrete_colormap,
+                include_streamplot=argument.include_streamplot,
+                intpl_method=argument.intpl_method,
+            )
+            status = True
+
+        if argument.plot_vector_field:
+            plot_vector_field()
+            status = True
+
+        if argument.plot_streamlines:
+            plot_streamlines()
+            status = True
+
+        if argument.plot_individual_streamline:
+            plot_individual_streamline()
+            status = True
+
+        if argument.plot_transition:
+            plot_transition_graph()
+            status = True
+
+        if not status:
+            print("No arguments passed. No graphs plotted.")
+
+
+if __name__ == "__main__":
+    app = CommandLine()
+    include_slider = True
+    discrete_colormap = True
+    include_streamplot = True
+    error_bar = False
+    plt.show()
