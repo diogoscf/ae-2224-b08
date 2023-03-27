@@ -75,5 +75,19 @@ ax_spal_grad.plot(xs,g)
 ax_spal.set_xlim(2*np.array(xlim))
 ax_spal.set_ylim(2*np.array(ylim))
 
+
+#adding shape factor
+data_delta = pd.read_excel(r'./Delta.xlsx')
+df_delta = pd.DataFrame(data_delta, columns=['x', 'y'])
+data_theta = pd.read_excel(r'./Theta.xlsx')
+df_theta = pd.DataFrame(data_theta, columns=['x', 'y'])
+
+cs_delta = CubicSpline(df_delta["x"].to_list(),df_delta["y"].to_list())
+cs_theta = CubicSpline(df_theta["x"].to_list(),df_theta["y"].to_list())
+
+shape_factor = cs_delta(xs)/cs_theta(xs)/1500
+fig_shape, ax_shape = plt.subplots()
+ax_spal.plot(xs,shape_factor)
+
 plt.show()
 
