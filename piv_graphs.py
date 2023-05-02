@@ -1,24 +1,28 @@
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib as mpl
 from matplotlib.colors import Normalize, LinearSegmentedColormap, BoundaryNorm
 from matplotlib.widgets import Slider
 import numpy as np
 import argparse
 from scipy.interpolate import RegularGridInterpolator, interp1d
 from scipy.integrate import solve_ivp, simpson
+from scipy.optimize import curve_fit
 
 from load_data import piv_data
 
 # Vector Field Colour Scheme
-vccsm = cm.turbo  # coolwarm, turbo, jet
+vccsm = cm.jet  # coolwarm, turbo, jet
 hmcm = cm.jet  # coolwarm, turbo, jet
+
+mpl.rcParams["axes.labelsize"] = 14
 
 thicknesses_in_heatmap = {
     "δ_max": [True, "c-"],
     "δ*": [True, "m-"],
     "θ*": [True, "w-"],
     "δ_99": [True, "g-"],
-    "δ_95": [True, "y-"],
+    "δ_95": [False, "y-"],
 }
 
 xcount, ycount = 395, 57
@@ -27,29 +31,32 @@ minl = (57 - ylim) * 395
 step = 20  # Resolution
 x, y = piv_data[:, 0], piv_data[:, 1]
 # print((x.max() - x.min()) / (xcount - 1))
+print(x.min(), x.max(), y.min(), y.max())
 xmin, xmax = x.min() / 1.02, x.max() * 1.02
 ymin, ymax = -0.001, y.max() * 1.03
 u, v = piv_data[:, 2], piv_data[:, 3]
-X, Y = piv_data[minl::step, 0], piv_data[minl::step, 1]
-U, V = piv_data[minl::step, 2], piv_data[minl::step, 3]
+X_step, Y_step = piv_data[minl::step, 0], piv_data[minl::step, 1]
+U_step, V_step = piv_data[minl::step, 2], piv_data[minl::step, 3]
 cutoff = 0.007
-seed_x_init = 0.5649
+seed_x_init = 0.5515
 sep, sep_err = 0.4851, 0.0147
 reatt, reatt_err = 0.7390, 0.0091
 
-colors = np.linalg.norm(np.column_stack((U, V)), axis=1)
+colors = np.linalg.norm(np.column_stack((U_step, V_step)), axis=1)
 norm = Normalize()
 norm.autoscale(colors)
 
 
 def plot_vector_field():
+    norm_ = Normalize()
+    norm_.autoscale([0, 1.4])
     fig_piv, ax_piv = plt.subplots()
     ax_piv.quiver(
-        X,
-        Y,
-        U,
-        V,
-        color=vccsm(norm(colors)),
+        X_step,
+        Y_step,
+        U_step,
+        V_step,
+        color=vccsm(norm_(colors)),
         pivot="mid",
         scale=100,
         scale_units="xy",
@@ -62,9 +69,14 @@ def plot_vector_field():
     ax_piv.set_xlabel("x/c [-]")
     ax_piv.set_ylabel("y/c [-]")
     ax_piv.set(ylim=(ymin, ymax), xlim=(xmin, xmax))
-    sm = cm.ScalarMappable(cmap=vccsm, norm=norm)
+    sm = cm.ScalarMappable(cmap=vccsm, norm=norm_)
     sm.set_array([])
-    plt.colorbar(sm, ax=ax_piv, label="Absolute velocity [1/U$_{inf}$]")
+    plt.colorbar(
+        sm,
+        ax=ax_piv,
+        label="Absolute velocity [1/U$_{inf}$]",
+        ticks=[0, 0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4],
+    )
 
 
 sorted_data = piv_data[np.lexsort((piv_data[:, 1], piv_data[:, 0]))]
@@ -517,6 +529,8 @@ def plot_velocity_heatmap(
 def plot_streamlines():
     fig_strm, ax_strm = plt.subplots()
     colour = speed.reshape((xcount, ycount)).T
+    norm_ = Normalize()
+    norm_.autoscale([0, 1.4])
     ax_strm.streamplot(
         xi,
         yi,
@@ -524,15 +538,17 @@ def plot_streamlines():
         vCi.reshape((xcount, ycount)).T,
         color=colour,
         cmap=vccsm,
+        norm=norm_,
         linewidth=1,
-        density=2,
+        density=(0.99, 0.5),
         arrowstyle="->",
         arrowsize=1.5,
+        broken_streamlines=False,
     )
     ax_strm.set_xlabel("x/c [-]")
     ax_strm.set_ylabel("y/c [-]")
     ax_strm.set(ylim=(ymin, ymax), xlim=(xmin, xmax))
-    sm = cm.ScalarMappable(cmap=vccsm, norm=norm)
+    sm = cm.ScalarMappable(cmap=vccsm, norm=norm_)
     sm.set_array([])
     plt.colorbar(sm, ax=ax_strm, label="Absolute velocity [1/U$_{inf}$]")
 
@@ -575,24 +591,101 @@ def plot_individual_streamline():
     plt.colorbar(sm, ax=ax_strm, label="Absolute velocity [1/U$_{inf}$]")
 
 
-def plot_transition_graph():
+tau = 1
+
+
+def make_fourier(na, nb):
+    def fourier(x, *a):
+        ret = 0.0
+        for deg in range(0, na):
+            ret += a[deg] * np.cos((deg + 1) * np.pi / tau * x)
+        for deg in range(na, na + nb):
+            ret += a[deg] * np.sin((deg + 1) * np.pi / tau * x)
+        return ret
+
+    return fourier
+
+
+def plot_transition_graph(regression_order=0):
     fig_trnst, ax_trnst = plt.subplots()
+
     plt1 = ax_trnst.plot(np.unique(X), delta_max[:, 0], "k-", label="$\delta_{max}$")
     plt2 = ax_trnst.plot(np.unique(X), delta_star, "r-", label="$\delta{*}$")
     plt3 = ax_trnst.plot(np.unique(X), theta_star, "b-", label="$\\theta{*}$")
     plt4 = ax_trnst.plot(np.unique(X), delta_99, "g-", label="$\delta_{99}$")
-    plt5 = ax_trnst.plot(np.unique(X), delta_95, "y-", label="$\delta_{95}$")
+    # plt5 = ax_trnst.plot(np.unique(X), delta_95, "y-", label="$\delta_{95}$")
     ax_trnst.set_xlabel("x/c [-]")
     ax_trnst.set_ylabel("y/c [-]")
     ax_trnst.set(ylim=(0, ymax), xlim=(xmin, xmax))
-    print("Transition point (Shape Factor): ", transition_h12)
-    print("Transition point (δ*): ", transition_delta_star)
     ax_trnst_2 = ax_trnst.twinx()
-    plt6 = ax_trnst_2.plot(np.unique(X), H12, "m-", label="H$_{12}$")
-    ax_trnst_2.set_ylabel("H$_{12}$ [-]")
-    ax_trnst_2.set(ylim=(ymin, np.max(H12) * 1.03))
 
-    lns = plt1 + plt2 + plt3 + plt4 + plt5 + plt6
+    H_laminar, H_turbulent = 2.59, 1.4
+    ax_trnst_2.plot(
+        (np.min(X), np.max(X)),
+        (H_laminar, H_laminar),
+        color="gray",
+        linestyle="--",
+        linewidth=0.5,
+        label="Theoretical Laminar $H_{12}$",
+    )
+
+    ax_trnst_2.plot(
+        (np.min(X), np.max(X)),
+        (H_turbulent, H_turbulent),
+        color="gray",
+        linestyle="--",
+        linewidth=0.5,
+        label="$Theoretical Turbulent H_{12}$",
+    )
+
+    ax_trnst_2.text(
+        0.72,
+        H_laminar + 0.07,
+        "Theoretical Laminar $H_{12}$",
+        ha="left",
+        color="gray",
+    )
+    ax_trnst_2.text(
+        0.72,
+        H_turbulent - 0.05,
+        "Theoretical Turbulent $H_{12}$",
+        ha="left",
+        va="top",
+        color="gray",
+    )
+
+    if regression_order:
+        min_H = np.max(H12) * 0.95  # Only relevant above this value
+        idxs = np.where(H12 > min_H)[0]
+        min_x, max_x = np.unique(X)[idxs[0]], np.unique(X)[idxs[-1]]
+        x_vals = np.linspace(min_x, max_x, 1000)
+        coeff = np.polyfit(
+            np.unique(X)[idxs[0] : idxs[-1] + 1],
+            H12[idxs[0] : idxs[-1] + 1],
+            regression_order,
+        )
+        poly = np.poly1d(coeff)
+        shape_factor = poly(x_vals)
+        # print(poly)
+        plt6 = ax_trnst_2.plot(np.unique(X), H12, "m--", label="H$_{12}$ (exact)")
+        plt7 = ax_trnst_2.plot(x_vals, shape_factor, "m-", label="H$_{12}$ (approx.)")
+        ax_trnst_2.axhline(min_H, color="k", linestyle="--", linewidth=0.4)
+        H_plt = plt6 + plt7
+        max_val = np.max(list(shape_factor) + list(H12))
+        transition_H12 = x_vals[np.argmax(shape_factor)]
+    else:
+        H_plt = ax_trnst_2.plot(np.unique(X), H12, "m-", label="H$_{12}$")
+        max_val = np.max(H12)
+        transition_H12 = np.unique(X)[np.argmax(H12)]
+
+    ax_trnst_2.set_ylabel("H$_{12}$ [-]")
+    ax_trnst_2.set(ylim=(ymin, max_val * 1.03))
+
+    print("Transition point (Shape Factor): ", transition_H12)
+    print("Transition point (δ*): ", transition_delta_star)
+
+    # lns = plt1 + plt2 + plt3 + plt4 + plt5 + H_plt
+    lns = plt1 + plt2 + plt3 + plt4 + H_plt
     labs = [l.get_label() for l in lns]
     ax_trnst.legend(lns, labs, loc=0)
 
@@ -613,7 +706,7 @@ class CommandLine:
         parser = argparse.ArgumentParser(description="Graphs for PIV Data Analysis")
         parser.add_argument(
             "--plot-heatmap",
-            help="Whether to plot the velocity heatmap (Default: False)",
+            help="Whether to plot the velocity heatmap. Plotted by default, unless other graphs are plotted",
             required=False,
             default=False,
             const=True,
@@ -662,6 +755,16 @@ class CommandLine:
         )
 
         parser.add_argument(
+            "--smooth-shape-factor",
+            help="Perform polynomial regression on shape factor curve with order ORDER (Default: False)",
+            required=False,
+            default=0,
+            const=2,
+            nargs="?",
+            type=int,
+        )
+
+        parser.add_argument(
             "--heatmap-velocity",
             help="Which velocity to use on the heatmap (x, absx or absolute). Default: x",
             required=False,
@@ -702,21 +805,10 @@ class CommandLine:
             required=False,
             default="linear",
         )
-        error_bar = (False,)
 
         argument = parser.parse_args()
         status = False
         # print(argument)
-
-        if argument.plot_heatmap:
-            plot_velocity_heatmap(
-                heatmap_velocity=argument.heatmap_velocity,
-                include_slider=argument.include_slider,
-                discrete_colormap=argument.discrete_colormap,
-                include_streamplot=argument.include_streamplot,
-                intpl_method=argument.intpl_method,
-            )
-            status = True
 
         if argument.plot_vector_field:
             plot_vector_field()
@@ -731,11 +823,20 @@ class CommandLine:
             status = True
 
         if argument.plot_transition:
-            plot_transition_graph()
+            plot_transition_graph(regression_order=argument.smooth_shape_factor)
             status = True
 
-        if not status:
-            print("No arguments passed. No graphs plotted.")
+        if argument.plot_heatmap or not status:
+            if not status:
+                print("No graphs specified, plotting heatmap by default")
+
+            plot_velocity_heatmap(
+                heatmap_velocity=argument.heatmap_velocity,
+                include_slider=argument.include_slider,
+                discrete_colormap=argument.discrete_colormap,
+                include_streamplot=argument.include_streamplot,
+                intpl_method=argument.intpl_method,
+            )
 
 
 if __name__ == "__main__":

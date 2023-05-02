@@ -6,7 +6,7 @@ Separation:   0.4874 ± 0.0124 (0.475004 - 0.499715)
 Reattachment: 0.7390 ± 0.0091 (0.748151 - 0.729906)
 Transition:   0.6485 ± 0.0024 (0.650875 - 0.646070)
 
-AT CUTOFF 0.07: (seed: 0.5515 - 0.5649) <- reasonable seeds
+AT CUTOFF 0.007: (seed: 0.5515 - 0.5649) <- reasonable seeds
 Separation:   0.4856 ± 0.0107 (0.474650 - 0.496349) 
 Reattachment: 0.7347 ± 0.0031 (0.737789 - 0.731677)
 Transition:   0.6473 ± 0.0010 (0.648307 - 0.646260)
@@ -22,7 +22,8 @@ Reattachment: 0.7390 ± 0.0091 (0.748151 - 0.729906)
 Transition:   0.6481 ± 0.0027 (0.645409 - 0.650875)
 
 SHAPE FACTOR:
-Transition: 0.6383 ± 0.0031 (0.63518 - 0.64139)
+Transition: 0.6383 ± 0.0031 (0.63518 - 0.64139) # Direct
+Transition: 0.6383 ± 0.0031 (0.63572 - 0.63826) # Polynomial fit
 
 MAX MOMENTUM THICKNESS:
 Transition: 0.6458 ± 0.0009 (uncertainty = resolution)
